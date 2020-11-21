@@ -62,8 +62,8 @@ function orderFiles (files, dir) {
     const filename = parsedPath.base;
     const firstLetter = filename.substring(0, 1).toUpperCase();
 
-    const destDir = path.join('./result', firstLetter);
-    const newFile = path.join('./result', firstLetter, parsedPath.base);
+    const destDir = path.join(dir, firstLetter);
+    const newFile = path.join(dir, firstLetter, parsedPath.base);
 
     if (!fs.existsSync(destDir)) {
       fs.mkdirSync(destDir);
