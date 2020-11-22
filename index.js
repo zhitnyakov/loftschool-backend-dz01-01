@@ -26,14 +26,18 @@ if (!source || !dest) {
 }
 
 // Do it!
-const files = collectFiles(source);
-orderFiles(files, dest);
-if (deleteSource) {
-  fs.rmdirSync(source, { recursive: true });
-}
+collectFiles(source)
+  .then(files => {
+    orderFiles(files, dest);
+  })
+  .then(() => {
+    if (deleteSource) {
+      fs.rmdirSync(source, { recursive: true });
+    }
+  });
 
 // Functions
-function collectFiles (dir) {
+async function collectFiles (dir) {
   let filesList = [];
 
   const files = fs.readdirSync(dir);
@@ -43,7 +47,7 @@ function collectFiles (dir) {
     const stats = fs.statSync(pathToFile);
 
     if (stats.isDirectory()) {
-      filesList = filesList.concat(collectFiles(pathToFile));
+      filesList = filesList.concat(await collectFiles(pathToFile));
     } else if (stats.isFile()) {
       filesList.push(pathToFile);
     }
@@ -52,7 +56,7 @@ function collectFiles (dir) {
   return filesList;
 }
 
-function orderFiles (files, dir) {
+async function orderFiles (files, dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
   }
@@ -73,4 +77,6 @@ function orderFiles (files, dir) {
       fs.linkSync(file, newFile);
     }
   }
+
+  return true;
 }
