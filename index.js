@@ -26,51 +26,49 @@ if (!source || !dest) {
 }
 
 // Do it!
-const files = collectFiles(source);
-orderFiles(files, dest);
-if (deleteSource) {
-  fs.rmdirSync(source, { recursive: true });
-}
+collectFiles(source, dest, deleteSource);
+process.nextTick(() => {
+  if (deleteSource) {
+    fs.rmdir(source, { recursive: true }, () => {});
+  }
+});
 
 // Functions
-function collectFiles (dir) {
-  let filesList = [];
+function collectFiles (sourceDir, resultDir, deleteSource = null) {
+  fs.readdir(sourceDir, function (_, files) {
+    console.log(files);
+    for (const i in files) {
+      const filePath = path.join(sourceDir, files[i]);
 
-  const files = fs.readdirSync(dir);
+      fs.stat(filePath, function (_, stats) {
+        if (stats && stats.isDirectory()) {
+          collectFiles(filePath, resultDir);
+        } else if (stats && stats.isFile()) {
+          const firstLetter = files[i].substring(0, 1).toUpperCase();
+          const destDir = path.join(resultDir, firstLetter);
+          const newFile = path.join(resultDir, firstLetter, files[i]);
 
-  for (const file of files) {
-    const pathToFile = path.join(dir, file);
-    const stats = fs.statSync(pathToFile);
+          fs.stat(resultDir, function (_, stats) {
+            if (!stats) {
+              fs.mkdir(resultDir, err => err);
+            }
 
-    if (stats.isDirectory()) {
-      filesList = filesList.concat(collectFiles(pathToFile));
-    } else if (stats.isFile()) {
-      filesList.push(pathToFile);
+            fs.stat(destDir, function (_, stats) {
+              if (!stats) {
+                fs.mkdir(destDir, function (err) {
+                  if (err && err.code === 'EEXIST') console.log('Dir ' + resultDir + ' already exists. Skipping creation.');
+
+                  console.log(`Copying file from ${filePath} to ${newFile}`);
+                  fs.copyFile(filePath, newFile, 0, _ => {});
+                });
+              } else {
+                console.log(`Copying file from ${filePath} to ${newFile}`);
+                fs.copyFile(filePath, newFile, 0, _ => {});
+              }
+            });
+          });
+        }
+      });
     }
-  }
-
-  return filesList;
-}
-
-function orderFiles (files, dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
-  }
-
-  for (const file of files) {
-    const parsedPath = path.parse(file);
-    const filename = parsedPath.base;
-    const firstLetter = filename.substring(0, 1).toUpperCase();
-
-    const destDir = path.join(dir, firstLetter);
-    const newFile = path.join(dir, firstLetter, parsedPath.base);
-
-    if (!fs.existsSync(destDir)) {
-      fs.mkdirSync(destDir);
-    }
-
-    if (!fs.existsSync(newFile)) {
-      fs.linkSync(file, newFile);
-    }
-  }
+  });
 }
