@@ -1,8 +1,12 @@
-// Load modules
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 
-// Process args
+//
+// Обработать аргументы запуска
+// - на первом месте указывать исходную папку
+// - на втором месте указывать результирующую папки
+// - флаг -d для удаления исходной папки
+//
 const args = process.argv.slice(2);
 
 let source;
@@ -19,64 +23,54 @@ for (const arg of args) {
   }
 }
 
-// If there's not enough args
-// Throw error end exit
+// Бросить ошибку, если нет исходной или результирующей папки
 if (!source || !dest) {
   throw new Error('You did not specify both source and destination folders');
 }
 
-// Do it!
-collectFiles(source)
-  .then(files => {
-    orderFiles(files, dest);
-  })
-  .then(() => {
-    if (deleteSource) {
-      fs.rmdirSync(source, { recursive: true });
-    }
-  });
+// Запускаем работу
+collectFiles(source, dest, deleteSource);
 
-// Functions
-async function collectFiles (dir) {
-  let filesList = [];
+async function collectFiles (sourceDir, resultDir, deleteSource = null) {
+  // Получаем список файлов директории
+  const files = await fs.readdir(sourceDir);
 
-  const files = fs.readdirSync(dir);
+  for (const i in files) {
+    const filePath = path.join(sourceDir, files[i]);
 
-  for (const file of files) {
-    const pathToFile = path.join(dir, file);
-    const stats = fs.statSync(pathToFile);
+    fs.stat(filePath)
+      .then(function (stats) {
+        if (stats.isDirectory()) {
+          // Если файл является директорией,
+          // то рекурсивно отправляем ее на обработку этой же функцией
 
-    if (stats.isDirectory()) {
-      filesList = filesList.concat(await collectFiles(pathToFile));
-    } else if (stats.isFile()) {
-      filesList.push(pathToFile);
-    }
+          collectFiles(filePath, resultDir, deleteSource);
+        } else if (stats && stats.isFile()) {
+          // Если файл является файлов, то копируем его
+          // в соответствующий каталог
+
+          const firstLetter = files[i].substring(0, 1).toUpperCase();
+          const destDir = path.join(resultDir, firstLetter);
+          const newFile = path.join(resultDir, firstLetter, files[i]);
+
+          // Создаем директорию с буквой алфавита
+          // { recursive: true } - для "мягкого" создания
+          fs.mkdir(destDir, { recursive: true })
+            .then(function () {
+              // Копируем файл
+              console.log(`Copying file from ${filePath} to ${newFile}`);
+              fs.copyFile(filePath, newFile)
+                .catch(function (err) {
+                  if (err) throw err;
+                });
+            })
+            .catch(function (err) {
+              if (err) throw err;
+            });
+        }
+      })
+      .catch(function (err) {
+        if (err) throw err;
+      });
   }
-
-  return filesList;
-}
-
-async function orderFiles (files, dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
-  }
-
-  for (const file of files) {
-    const parsedPath = path.parse(file);
-    const filename = parsedPath.base;
-    const firstLetter = filename.substring(0, 1).toUpperCase();
-
-    const destDir = path.join(dir, firstLetter);
-    const newFile = path.join(dir, firstLetter, parsedPath.base);
-
-    if (!fs.existsSync(destDir)) {
-      fs.mkdirSync(destDir);
-    }
-
-    if (!fs.existsSync(newFile)) {
-      fs.linkSync(file, newFile);
-    }
-  }
-
-  return true;
 }
