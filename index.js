@@ -1,8 +1,12 @@
-// Load modules
 const fs = require('fs');
 const path = require('path');
 
-// Process args
+//
+// Обработать аргументы запуска
+// - на первом месте указывать исходную папку
+// - на втором месте указывать результирующую папки
+// - флаг -d для удаления исходной папки
+//
 const args = process.argv.slice(2);
 
 let source;
@@ -19,52 +23,47 @@ for (const arg of args) {
   }
 }
 
-// If there's not enough args
-// Throw error end exit
+// Бросить ошибку, если нет исходной или результирующей папки
 if (!source || !dest) {
   throw new Error('You did not specify both source and destination folders');
 }
 
-// Do it!
+// Запускаем работу
 collectFiles(source, dest, deleteSource);
-process.nextTick(() => {
-  if (deleteSource) {
-    fs.rmdir(source, { recursive: true }, () => {});
-  }
-});
 
-// Functions
 function collectFiles (sourceDir, resultDir, deleteSource = null) {
-  fs.readdir(sourceDir, function (_, files) {
-    console.log(files);
+  // Получаем список файлов директории
+  fs.readdir(sourceDir, function (err, files) {
+    if (err) throw err;
+
     for (const i in files) {
       const filePath = path.join(sourceDir, files[i]);
 
-      fs.stat(filePath, function (_, stats) {
-        if (stats && stats.isDirectory()) {
-          collectFiles(filePath, resultDir);
+      fs.stat(filePath, function (err, stats) {
+        if (err) throw err;
+
+        if (stats.isDirectory()) {
+          // Если файл является директорией,
+          // то рекурсивно отправляем ее на обработку этой же функцией
+
+          collectFiles(filePath, resultDir, deleteSource);
         } else if (stats && stats.isFile()) {
+          // Если файл является файлов, то копируем его
+          // в соответствующий каталог
+
           const firstLetter = files[i].substring(0, 1).toUpperCase();
           const destDir = path.join(resultDir, firstLetter);
           const newFile = path.join(resultDir, firstLetter, files[i]);
 
-          fs.stat(resultDir, function (_, stats) {
-            if (!stats) {
-              fs.mkdir(resultDir, err => err);
-            }
+          // Создаем директорию с буквой алфавита
+          // { recursive: true } - для "мягкого" создания
+          fs.mkdir(destDir, { recursive: true }, function (err) {
+            if (err) throw err;
 
-            fs.stat(destDir, function (_, stats) {
-              if (!stats) {
-                fs.mkdir(destDir, function (err) {
-                  if (err && err.code === 'EEXIST') console.log('Dir ' + resultDir + ' already exists. Skipping creation.');
-
-                  console.log(`Copying file from ${filePath} to ${newFile}`);
-                  fs.copyFile(filePath, newFile, 0, _ => {});
-                });
-              } else {
-                console.log(`Copying file from ${filePath} to ${newFile}`);
-                fs.copyFile(filePath, newFile, 0, _ => {});
-              }
+            // Копируем файл
+            console.log(`Copying file from ${filePath} to ${newFile}`);
+            fs.copyFile(filePath, newFile, 0, function (err) {
+              if (err) throw err;
             });
           });
         }
